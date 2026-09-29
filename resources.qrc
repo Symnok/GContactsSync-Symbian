@@ -1,0 +1,12 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file>qml/main.qml</file>
+        <file>qml/MainPage.qml</file>
+        <file>qml/SettingsPage.qml</file>
+        <file>qml/AboutPage.qml</file>
+        <!-- The trust anchors. Shipped inside the binary rather than as a file, so there is
+             nothing for a user to delete and no path to get wrong on a device. -->
+        <file>certs/google-cacert.pem</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,20 @@
+/*
+ * GContactsSync - Symbian startup list entry.
+ * Copyright (C) 2026 - GPL-3.0-or-later, see LICENSE.
+ *
+ * Compiled into the package and installed to \resource\apps\, which is world-readable. It is NOT
+ * installed into the Startup List Manager's import directory: the app copies it there itself when
+ * autostart is switched on, and deletes it again when it is switched off. See src/app/autostart.cpp
+ * for why that only works on a phone whose platform security has been patched.
+ *
+ * The executable is named without a drive on purpose. The install drive is not known when this is
+ * compiled, and Symbian's loader searches the drives in turn for a drive-less path, so this works
+ * whether the app went to phone memory or to the card.
+ */
+#include <startupitem.rh>
+
+RESOURCE STARTUP_ITEM_INFO gcontactssync_startup
+    {
+    executable_name = "\\sys\\bin\\GContactsSync.exe";
+    recovery = EStartupItemExPolicyNone;
+    }
