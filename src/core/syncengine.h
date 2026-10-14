@@ -17,8 +17,11 @@
 #ifndef SYNCENGINE_H
 #define SYNCENGINE_H
 
+#include <QtCore/QMap>
 #include <QtCore/QObject>
+#include <QtCore/QSet>
 #include <QtCore/QString>
+#include <QtCore/QStringList>
 
 class CardDavClient;
 class IContactStore;
@@ -71,6 +74,14 @@ private:
     /// will need: the card itself, its path, and the fingerprint of the result as the phonebook
     /// actually stored it. False when that contact could not be written.
     bool storeCard(IContactStore *store, SyncState *state, const class FetchedCard &card);
+
+    /// Downloads and saves hrefs a hundred at a time. After each batch the etags of what reached
+    /// the phone are recorded and the state saved, so a sync that is cut short - the phone kills
+    /// an app that stops responding for long enough - resumes where it stopped instead of
+    /// starting over. uids collects the UID of every card that arrived.
+    bool fetchAndStore(CardDavClient *client, IContactStore *store, SyncState *state,
+                       const QStringList &hrefs, const QMap<QString, QString> &serverEtags,
+                       SyncOutcome *outcome, QSet<QString> *stored, QSet<QString> *uids);
 
     void report(const QString &message);
 

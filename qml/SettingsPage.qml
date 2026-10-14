@@ -166,6 +166,25 @@ Page {
                 opacity: 0.6
                 wrapMode: Text.WordWrap
             }
+
+            Button {
+                width: parent.width
+                text: qsTr("repair phonebook")
+                enabled: !app.busy
+                onClicked: {
+                    repairDialog.message = qsTr("Card templates to delete:") + "\n"
+                        + app.strayTemplatesText() + "\n\n"
+                        + qsTr("Then the database is checked for damage and compacted. Contacts themselves are not touched. This cannot be undone.")
+                    repairDialog.open()
+                }
+            }
+            Label {
+                width: parent.width
+                text: qsTr("For when Contacts hangs opening a contact. Deletes card templates other than the phone's own one - Contacts never creates those - then checks and compacts the database.")
+                font.pixelSize: 15
+                opacity: 0.6
+                wrapMode: Text.WordWrap
+            }
         }
     }
 
@@ -256,5 +275,13 @@ Page {
         acceptButtonText: qsTr("Forget")
         rejectButtonText: qsTr("Cancel")
         onAccepted: { app.forgetAccount(); pageStack.pop() }
+    }
+
+    QueryDialog {
+        id: repairDialog
+        titleText: qsTr("Repair phonebook?")
+        acceptButtonText: qsTr("Repair")
+        rejectButtonText: qsTr("Cancel")
+        onAccepted: { app.repairPhonebook(); pageStack.pop() }
     }
 }

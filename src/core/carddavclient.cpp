@@ -343,7 +343,7 @@ bool CardDavClient::getChanges(const QMap<QString, QString> &knownEtags, ServerD
 // FETCH
 // ============================================================================
 bool CardDavClient::fetch(const QStringList &hrefs, const QMap<QString, QString> &serverEtags,
-                          QList<FetchedCard> *cards)
+                          QList<FetchedCard> *cards, int progressOffset)
 {
     cards->clear();
     if (hrefs.isEmpty()) return true;
@@ -383,7 +383,8 @@ bool CardDavClient::fetch(const QStringList &hrefs, const QMap<QString, QString>
         }
 
         emit progress(tr("Downloaded %1 of %2...")
-                          .arg(qMin(offset + count, hrefs.size())).arg(hrefs.size()));
+                          .arg(progressOffset + qMin(offset + count, hrefs.size()))
+                          .arg(progressOffset + hrefs.size()));
     }
     return true;
 }

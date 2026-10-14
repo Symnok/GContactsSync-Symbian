@@ -2,6 +2,8 @@
 // Copyright (C) 2026 - GPL-3.0-or-later, see LICENSE.
 #include "syncengine.h"
 
+#include <QtCore/QCoreApplication>
+#include <QtCore/QEventLoop>
 #include <QtCore/QSet>
 #include <QtCore/QStringList>
 #include <QtCore/QUuid>
@@ -81,10 +83,6 @@ bool SyncEngine::fullDownload(CardDavClient *client, IContactStore *store, SyncS
     report(tr("Found %1 contacts. Downloading...").arg(listing.size()));
 
     const QStringList hrefs = listing.keys();
-    QList<FetchedCard> cards;
-    if (!client->fetch(hrefs, listing, &cards)) return false;
-
-    report(tr("Saving %1 contacts to the phone...").arg(cards.size()));
 
     // Every UID Google currently has, whether or not its card downloaded cleanly. Used below to
     // decide what on the phone is a stray: a contact that failed to download must not be mistaken
@@ -98,27 +96,13 @@ bool SyncEngine::fullDownload(CardDavClient *client, IContactStore *store, SyncS
         if (listing.contains(it.value())) onGoogle.insert(it.key());
     }
 
-    QSet<QString> stored;
-    for (int i = 0; i < cards.size(); ++i) {
-        const FetchedCard &card = cards.at(i);
-        onGoogle.insert(card.contact.uid.isEmpty()
-                            ? SyncState::uidFromHref(card.href) : card.contact.uid);
-
-        if (storeCard(store, state, card)) {
-            outcome->written++;
-            stored.insert(card.href);
-        } else {
-            outcome->failed++;
-        }
-    }
-
-    // Only record etags for contacts that actually reached the phone, so anything that failed is
-    // picked up again by the next sync instead of being treated as current.
+    // Only contacts that actually reach the phone get an etag, so anything that failed - or was
+    // never reached because the sync was cut short - is picked up again by the next sync instead
+    // of being treated as current. fetchAndStore records them batch by batch.
     state->etags.clear();
-    for (QMap<QString, QString>::const_iterator it = listing.constBegin();
-         it != listing.constEnd(); ++it) {
-        if (stored.contains(it.key())) state->etags.insert(it.key(), it.value());
-    }
+    QSet<QString> stored;
+    if (!fetchAndStore(client, store, state, hrefs, listing, outcome, &stored, &onGoogle))
+        return false;
 
     // A full download is also a reset: a contact of ours that Google no longer has must go, or one
     // deleted while this app was not syncing would live on for ever. Only ever our own contacts -
@@ -162,17 +146,10 @@ bool SyncEngine::incrementalDownload(CardDavClient *client, IContactStore *store
     QSet<QString> stored;
 
     if (!diff.changed.isEmpty()) {
-        QList<FetchedCard> cards;
-        if (!client->fetch(diff.changed, diff.serverEtags, &cards)) return false;
-
-        for (int i = 0; i < cards.size(); ++i) {
-            if (storeCard(store, state, cards.at(i))) {
-                outcome->written++;
-                stored.insert(cards.at(i).href);
-            } else {
-                outcome->failed++;
-            }
-        }
+        QSet<QString> uids;
+        if (!fetchAndStore(client, store, state, diff.changed, diff.serverEtags, outcome,
+                           &stored, &uids))
+            return false;
     }
 
     for (int i = 0; i < diff.deleted.size(); ++i) {
@@ -207,6 +184,47 @@ bool SyncEngine::incrementalDownload(CardDavClient *client, IContactStore *store
         // A brand-new contact that failed is simply left out, so the next sync sees it as new.
     }
     state->etags = updated;
+    return true;
+}
+
+bool SyncEngine::fetchAndStore(CardDavClient *client, IContactStore *store, SyncState *state,
+                               const QStringList &hrefs, const QMap<QString, QString> &serverEtags,
+                               SyncOutcome *outcome, QSet<QString> *stored, QSet<QString> *uids)
+{
+    // Downloading everything first and then writing everything in one pass kept the UI thread
+    // busy for minutes on a phonebook of a few hundred contacts, with nothing recorded until the
+    // very end - so a sync the phone gave up on had to start again from nothing.
+    const int kBatch = 100;
+
+    for (int offset = 0; offset < hrefs.size(); offset += kBatch) {
+        if (client->wasCancelled()) return false;
+
+        const QStringList batch = hrefs.mid(offset, kBatch);
+        QList<FetchedCard> cards;
+        if (!client->fetch(batch, serverEtags, &cards, offset)) return false;
+
+        for (int i = 0; i < cards.size(); ++i) {
+            const FetchedCard &card = cards.at(i);
+            uids->insert(card.contact.uid.isEmpty()
+                             ? SyncState::uidFromHref(card.href) : card.contact.uid);
+
+            if (storeCard(store, state, card)) {
+                outcome->written++;
+                stored->insert(card.href);
+                state->etags.insert(card.href, serverEtags.value(card.href));
+            } else {
+                outcome->failed++;
+            }
+
+            // Let the phone see the app is alive between writes; Symbian closes one that does not
+            // answer for long enough. User input stays queued, as it does during a request.
+            QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+        }
+
+        state->save();
+        report(tr("Saved %1 of %2 contacts to the phone...")
+                   .arg(qMin(offset + kBatch, hrefs.size())).arg(hrefs.size()));
+    }
     return true;
 }
 

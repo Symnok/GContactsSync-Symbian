@@ -37,6 +37,20 @@ Page {
                 wrapMode: Text.WordWrap
             }
 
+            Button {
+                width: parent.width
+                text: qsTr("Save contact field dump")
+                onClicked: app.dumpContactFields()
+            }
+
+            Label {
+                width: parent.width
+                text: app.result
+                visible: text.length > 0
+                font.pixelSize: 15
+                wrapMode: Text.WordWrap
+            }
+
             Item { width: 1; height: platformStyle.paddingLarge }
 
             Label {

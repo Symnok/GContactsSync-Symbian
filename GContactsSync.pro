@@ -7,7 +7,7 @@
 
 TEMPLATE = app
 TARGET = GContactsSync
-VERSION = 1.0.12
+VERSION = 1.0.17
 
 QT += core gui network declarative
 

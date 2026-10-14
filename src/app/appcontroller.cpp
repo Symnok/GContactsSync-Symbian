@@ -267,6 +267,36 @@ QString AppController::aboutText() const
     return text;
 }
 
+void AppController::dumpContactFields()
+{
+    if (!m_contacts) return;
+
+    const char * const paths[] = { "E:/gcontactssync-dump.txt", "F:/gcontactssync-dump.txt",
+                                   "C:/Data/gcontactssync-dump.txt" };
+    for (unsigned i = 0; i < sizeof paths / sizeof paths[0]; ++i) {
+        const QString written = m_contacts->dumpFields(QLatin1String(paths[i]));
+        if (!written.isEmpty()) {
+            setResult(tr("Contact fields written to %1").arg(QDir::toNativeSeparators(written)),
+                      false);
+            return;
+        }
+    }
+    setResult(tr("The field dump could not be written."), true);
+}
+
+QString AppController::strayTemplatesText()
+{
+    return m_contacts ? m_contacts->strayTemplates() : tr("The phonebook is not available.");
+}
+
+void AppController::repairPhonebook()
+{
+    if (!m_contacts || m_busy) return;
+    setResult(m_contacts->repairPhonebook()
+                  + QLatin1Char('\n') + tr("Restart the phone before opening Contacts."),
+              false);
+}
+
 void AppController::onProgress(const QString &message)
 {
     setStatus(message);
@@ -342,6 +372,18 @@ void AppController::runSync(Direction direction, bool fromTimer)
     SyncState state(dataDir());
     state.load();
 
+    // Contacts written by 1.0.13 and earlier have hand-built fields the Contacts application
+    // mostly ignores. Forgetting the etags makes this a full download, which rewrites each of them
+    // in place in the current layout. The forgetting is saved and the layout marked current at
+    // once: a contact the rewrite has not reached yet has no etag, so if the sync is cut short the
+    // next one carries on from there rather than starting the whole rewrite again.
+    if (direction == Download && !m_contacts->layoutIsCurrent()) {
+        state.etags.clear();
+        state.save();
+        m_contacts->markLayoutCurrent();
+        setStatus(tr("Updating the contacts already on the phone..."));
+    }
+
     const SyncOutcome outcome = direction == Download
         ? engine.download(&client, m_contacts, &state)
         : engine.upload(&client, m_contacts, &state);
@@ -351,7 +393,10 @@ void AppController::runSync(Direction direction, bool fromTimer)
 
     const QString when = QDateTime::currentDateTime().toString(QLatin1String("d MMM yyyy hh:mm"));
     if (outcome.success) {
-        if (direction == Download) m_lastDownload = when;
+        if (direction == Download) {
+            m_lastDownload = when;
+            if (outcome.failed == 0) m_contacts->markLayoutCurrent();
+        }
         else m_lastUpload = when;
         saveSettings();
         // A download that worked is what arms the timer - see applyTimer().

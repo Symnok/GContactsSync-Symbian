@@ -40,6 +40,7 @@
 #include "contactstore.h"
 
 class CContactDatabase;
+class CContactItem;
 
 class PhoneContacts : public IContactStore
 {
@@ -55,6 +56,27 @@ public:
     /// What a bug report needs when a sync will not stick: whether the database opened, how many
     /// contacts it holds, how many are ours, and why the last write failed.
     QString diagnostics();
+
+    /// Writes how the fields of a few synced contacts, a few hand-made ones and the system
+    /// template are stored (types, mapping, label, flags; values as lengths only) to path.
+    /// Returns path, or an empty string when the file could not be written.
+    QString dumpFields(const QString &path);
+
+    /// Whether the contacts this app owns were written in the current field layout. Up to 1.0.13
+    /// fields were built by hand and Contacts showed little more than the names; when this is
+    /// false the caller makes the next download a full one, which rewrites every contact in place.
+    /// Card templates other than the system one, as "id: name" lines. The Contacts application
+    /// never creates these, and one was found on a phone whose Contacts hung on opening any
+    /// contact - including ones made by hand after everything else was deleted.
+    QString strayTemplates();
+
+    /// Deletes those card templates, recovers the database if it reports damage, and compacts
+    /// it. The only thing in this class that touches items this app does not own, and it runs
+    /// only when the user confirms it. Returns what was done.
+    QString repairPhonebook();
+
+    bool layoutIsCurrent() const;
+    void markLayoutCurrent();
 
     // IContactStore
     bool write(const VCardContact &c, QString *error);
@@ -73,10 +95,12 @@ private:
     /// The contact id this app holds for a UID, or 0. Checks the map first, then the note tag.
     quint32 idForUid(const QString &uid);
     quint32 findByNoteTagL(const QString &uid);
+    void buildTagIndexL();
 
     bool loadOwned();
     bool saveOwned() const;
     QString ownedPath() const;
+    QString layoutPath() const;
 
     static QString errorText(int symbianError);
 
@@ -87,6 +111,15 @@ private:
 
     /// Google UID -> TContactItemId. This is what "ours" means.
     QMap<QString, quint32> m_owned;
+
+    /// The phonebook's system template: the Contacts application's own definition of every field.
+    /// Each field this app writes is a copy of the matching one, so Contacts recognises it.
+    CContactItem *m_template;
+
+    /// Note tag -> contact id, from one pass over the phonebook. Without it a first sync scanned
+    /// the whole phonebook once per contact. Rebuilt when older than a minute.
+    QMap<QString, quint32> m_tagIndex;
+    qint64 m_tagIndexBuiltMs;
 };
 
 #endif // PHONECONTACTS_H

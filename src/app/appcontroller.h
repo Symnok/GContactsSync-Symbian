@@ -96,6 +96,15 @@ public slots:
     /// Asks the sync in progress to stop after the current request.
     void cancel();
 
+    /// Writes PhoneContacts::dumpFields to the memory card (or phone memory) and reports where.
+    void dumpContactFields();
+
+    /// What repairPhonebook would delete, for the confirmation dialog.
+    QString strayTemplatesText();
+
+    /// PhoneContacts::repairPhonebook, reported as the result.
+    void repairPhonebook();
+
 signals:
     void accountChanged();
     void busyChanged();

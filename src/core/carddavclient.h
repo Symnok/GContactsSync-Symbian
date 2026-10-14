@@ -94,9 +94,11 @@ public:
     bool getChanges(const QMap<QString, QString> &knownEtags, ServerDiff *diff);
 
     /// The cards for a set of paths. Batches with addressbook-multiget (RFC 6352 section 8.7) and
-    /// falls back to one GET per contact if the server refuses the REPORT.
+    /// falls back to one GET per contact if the server refuses the REPORT. progressOffset is how
+    /// many the caller already fetched in earlier calls, so the progress message counts from there
+    /// ("Downloaded 370 of 400") rather than from zero for every batch.
     bool fetch(const QStringList &hrefs, const QMap<QString, QString> &serverEtags,
-               QList<FetchedCard> *cards);
+               QList<FetchedCard> *cards, int progressOffset = 0);
 
     /// PUTs one card. Pass an empty href to create the contact at a path derived from the UID.
     /// knownEtag is sent as If-Match, so a contact that changed on Google in the meantime comes

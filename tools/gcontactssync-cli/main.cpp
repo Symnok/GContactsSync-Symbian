@@ -711,6 +711,29 @@ static int liveSync(const QString &dataDir, bool doUpload)
         << " failed=" << down.failed << " contacts in memory=" << store.byUid.size() << endl;
     if (!down.success) return 1;
 
+    // What actually arrived. A sync that files every name but no numbers shows up here as
+    // "with phone=0" rather than as an empty phonebook entry on the device.
+    {
+        int withPhone = 0, withEmail = 0, withAddress = 0, withOrg = 0, withNote = 0, cards = 0;
+        for (QMap<QString, VCardContact>::const_iterator it = store.byUid.constBegin();
+             it != store.byUid.constEnd(); ++it) {
+            if (!it.value().phones.isEmpty()) ++withPhone;
+            if (!it.value().emails.isEmpty()) ++withEmail;
+            if (!it.value().addresses.isEmpty()) ++withAddress;
+            if (!it.value().organization.isEmpty()) ++withOrg;
+            if (!it.value().notes.isEmpty()) ++withNote;
+            if (!state.readCard(it.key()).isEmpty()) ++cards;
+        }
+        out << "       with phone=" << withPhone << " email=" << withEmail
+            << " address=" << withAddress << " org=" << withOrg << " note=" << withNote
+            << " stored cards=" << cards << endl;
+        if (!store.byUid.isEmpty()) {
+            const QString first = store.byUid.keys().first();
+            out << "--- stored card of " << store.byUid.value(first).displayName << " ---" << endl
+                << state.readCard(first) << endl << "---" << endl;
+        }
+    }
+
     // A second download must find nothing to do. If it does find work, the etag bookkeeping or the
     // fingerprint is wrong, and on a real phone that would mean re-writing the whole phonebook
     // every fifteen minutes.
@@ -771,6 +794,24 @@ int main(int argc, char *argv[])
         const bool ok = client.list(&etags);
         out << (ok ? "list() returned true" : "list() returned false: " + client.lastError())
             << endl;
+        return 0;
+    }
+
+    // --parse <file>: run real vCards (e.g. saved with curl) through the parser and print what
+    // the phone would be given. Needs no network and no TLS.
+    if (args.contains(QLatin1String("--parse"))) {
+        const int at = args.indexOf(QLatin1String("--parse"));
+        QFile file(at + 1 < args.size() ? args.at(at + 1) : QString());
+        if (!file.open(QIODevice::ReadOnly)) { out << "cannot open file" << endl; return 2; }
+        const QStringList cards = VCardParser::splitCards(QString::fromUtf8(file.readAll()));
+        for (int i = 0; i < cards.size(); ++i) {
+            const VCardContact c = VCardParser::parse(cards.at(i));
+            out << c.displayName << " | first=" << c.firstName << " last=" << c.lastName
+                << " phones=" << c.phones.size() << " emails=" << c.emails.size()
+                << " addresses=" << c.addresses.size() << endl;
+            for (int p = 0; p < c.phones.size(); ++p)
+                out << "    tel type=" << c.phones.at(p).type << endl;
+        }
         return 0;
     }
 
